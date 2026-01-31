@@ -27,5 +27,11 @@ Wenn `<dir>` ausgelassen wird, wird ./test/ verwendet.
 
 Alle Pascal-Dateien in dem angegebenen Ordner und allen Unterordnern werden getestet. Ordner und Dateien, die mit `_` oder `-` beginnen werden ignoriert, sowie sample.pas
 
+## Beispielausgabe mit `-a`
+<img width="1377" height="403" alt="image" src="https://github.com/user-attachments/assets/4e03730a-c83c-4b3f-b8e2-74a7280b883c" />
+
+## Beispielausgabe ohne `-a`
+<img width="1377" height="965" alt="image" src="https://github.com/user-attachments/assets/86ed74c9-fc74-4ef2-ae1f-23550c4b31ff" />
+
 ## Credits
 Einige der Test Cases sind von [Jonas' Repo](https://codeberg.org/jfowl/CoBa2025-Pacal-Test-Cases) übernommen (und leicht abgewandelt)
