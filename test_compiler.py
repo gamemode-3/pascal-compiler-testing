@@ -29,7 +29,7 @@ Auf `None` setzen, um das auszuschalten
 # === Miscellaneous ===
 
 DELETE_GENERATED_FILES_WHEN_RUNNING_ALL = True
-DELETE_GENERATED_FILES_WHEN_RUNNING_ONE = False
+DELETE_GENERATED_FILES_WHEN_RUNNING_ONE = True
 
 # ==== Formatting =====
 
