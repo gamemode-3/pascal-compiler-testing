@@ -26,3 +26,6 @@ python3 test_compiler.py -a [<dir>]
 Wenn `<dir>` ausgelassen wird, wird ./test/ verwendet.
 
 Alle Pascal-Dateien in dem angegebenen Ordner und allen Unterordnern werden getestet. Ordner und Dateien, die mit `_` oder `-` beginnen werden ignoriert, sowie sample.pas
+
+## Credits
+Einige der Test Cases sind von [Jonas' Repo](https://codeberg.org/jfowl/CoBa2025-Pacal-Test-Cases) übernommen (und leicht abgewandelt)
