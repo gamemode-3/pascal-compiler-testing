@@ -11,9 +11,7 @@ import re
 OWN_COMPILE_CMD = (
     'java -cp antlr-4.13.2-complete.jar:. StupsCompiler -compile "{test_case}"'
 )
-
 FPC_COMPILE_CMD = 'fpc "{test_case}"'
-
 JASMIN_COMPILE_CMD = 'java -jar jasmin.jar -d "{dir}" "{jasmin_file_path}"'
 
 # ==== Directories ====
@@ -21,8 +19,17 @@ JASMIN_COMPILE_CMD = 'java -jar jasmin.jar -d "{dir}" "{jasmin_file_path}"'
 TEST_DIR = Path("./test/")
 """Der Ordner, in dem die Test Cases liegen. Auch Unterordner werden betrachtet."""
 
-COPY_TO = Path("./test/sample.pas")
-"""Die .pas Datei wird in einen Kompilierungs-Ordner kopiert, damit nicht überall .j, .class, .bak Dateien etc. rumfliegen"""
+COPY_TO = Path("./test/build/sample.pas")
+"""
+Die .pas Datei wird in einen Kompilierungs-Ordner kopiert und dort kompiliert. 
+
+Auf `None` setzen, um das auszuschalten
+"""
+
+# === Miscellaneous ===
+
+DELETE_GENERATED_FILES_WHEN_RUNNING_ALL = True
+DELETE_GENERATED_FILES_WHEN_RUNNING_ONE = False
 
 # ==== Formatting =====
 
@@ -98,7 +105,7 @@ class TestDetails:
         self.execution_output = execution_output
 
 
-def print_test_output(details: TestDetails, test_success: bool, test_message: str = ""):
+def print_test_result(details: TestDetails, test_success: bool, test_message: str = ""):
     if details.compilation_output:
         print(
             f"⚙ fpc compilation ({success_str(details.fpc_comp_success)}):\n\n{indent(details.fpc_comp_out)}\n"
@@ -122,12 +129,19 @@ def print_test_output(details: TestDetails, test_success: bool, test_message: st
 
 
 def test_file(
-    file_path: Path, test_path: Path, compilation_output=True, execution_output=True
+    file_path: Path,
+    test_path: Path,
+    compilation_output=True,
+    execution_output=True,
+    delete_gen_files=DELETE_GENERATED_FILES_WHEN_RUNNING_ONE,
 ) -> bool:
     assert file_path.exists()
     assert file_path.is_file()
 
-    class_name = test_path.name.removesuffix(".pas").title()
+    if test_path is None:
+        test_path = file_path
+
+    class_name = file_path.name.removesuffix(".pas").title()
     # read class name from file
     with open(file_path, "r") as f:
         content = f.read()
@@ -137,7 +151,6 @@ def test_file(
 
     details = TestDetails(file_path, compilation_output, execution_output)
     print(f"▪ testing {details.file_path}")
-    details.execution_output
 
     if file_path != test_path:
         os.system(f'cp "{file_path}" "{test_path}"')
@@ -155,7 +168,7 @@ def test_file(
         details.fpc_comp_success = False
     except UnicodeDecodeError as e:
         details.fpc_comp_out = str(e)
-    
+
     if "invalid continuation byte" in details.fpc_comp_out:
         details.fpc_comp_success = False
 
@@ -193,59 +206,48 @@ def test_file(
         if "Error" in jasmin_comp_out:
             details.own_comp_success = False
 
-    if not details.fpc_comp_success or not details.own_comp_success:
-        details.execution_output = False
-
-    if details.fpc_comp_success and not details.own_comp_success:
-        print_test_output(
-            details, False, "own compilation failed when it should have succeeded"
-        )
-        return False
-    if not details.fpc_comp_success and details.own_comp_success:
-        print_test_output(
-            details, False, "own compilation succeeded when it should have failed"
-        )
-        return False
-    if not details.fpc_comp_success and not details.own_comp_success:
-        print_test_output(details, True, "successfully failed")
-        return True
-
     fpc_timeout = False
-    fpc_file_path = test_path.parent / test_path.name.removesuffix(".pas")
-    proc = subprocess.Popen(
-        [str(fpc_file_path)],
-        stderr=subprocess.PIPE,
-        stdout=subprocess.PIPE,
-        text=True,
-    )
-    try:
-        details.fpc_result_out, _ = proc.communicate(timeout=1)
-    except subprocess.TimeoutExpired as e:
-        proc.kill()
-        proc.wait()
-        details.fpc_result_out = "[timed out]"
-        fpc_timeout = True
-    except subprocess.CalledProcessError as e:
-        details.fpc_result_out = e.output
+    if details.fpc_comp_success:
+        fpc_file_path = test_path.parent / test_path.name.removesuffix(".pas")
+        proc = subprocess.Popen(
+            [str(fpc_file_path)],
+            stderr=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            text=True,
+        )
+        try:
+            details.fpc_result_out, _ = proc.communicate(timeout=1)
+        except subprocess.TimeoutExpired as e:
+            proc.kill()
+            proc.wait()
+            details.fpc_result_out = "[ timed out ]"
+            fpc_timeout = True
+        except subprocess.CalledProcessError as e:
+            details.fpc_result_out = e.output
+    else:
+        details.fpc_result_out = "[ compilation failed ]"
 
     own_timeout = False
-    proc = subprocess.Popen(
-        [f'java -cp "{test_path.parent}" "{class_name}"'],
-        stderr=subprocess.PIPE,
-        stdout=subprocess.PIPE,
-        shell=True,
-        text=True,
-        start_new_session=True,
-    )
-    try:
-        details.own_result_out, _ = proc.communicate(timeout=1)
-    except subprocess.TimeoutExpired as e:
-        os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
-        proc.wait()
-        details.own_result_out = "[timed out]"
-        own_timeout = True
-    except subprocess.CalledProcessError as e:
-        details.own_result_out = e.output
+    if details.own_comp_success:
+        proc = subprocess.Popen(
+            [f'java -cp "{test_path.parent}" "{class_name}"'],
+            stderr=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            shell=True,
+            text=True,
+            start_new_session=True,
+        )
+        try:
+            details.own_result_out, _ = proc.communicate(timeout=1)
+        except subprocess.TimeoutExpired as e:
+            os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
+            proc.wait()
+            details.own_result_out = "[ timed out ]"
+            own_timeout = True
+        except subprocess.CalledProcessError as e:
+            details.own_result_out = e.output
+    else:
+        details.own_result_out = "[ compilation failed ]"
 
     # clean output
     details.fpc_result_out = (
@@ -258,18 +260,46 @@ def test_file(
         "TRUE", "true"
     )
 
+    if delete_gen_files:
+        base_name = test_path.name.removesuffix(".pas")
+        junk_files_names = [
+            base_name,
+            base_name + ".j",
+            base_name + ".o",
+            class_name + ".class",
+        ]
+        for f in junk_files_names:
+            file_path = test_path.parent / f
+            if file_path.exists():
+                Path.unlink(test_path.parent / f)
+
+    # print test result
+    if details.fpc_comp_success and not details.own_comp_success:
+        print_test_result(
+            details, False, "own compilation failed when it should have succeeded"
+        )
+        return False
+    if not details.fpc_comp_success and details.own_comp_success:
+        print_test_result(
+            details, False, "own compilation succeeded when it should have failed"
+        )
+        return False
+    if not details.fpc_comp_success and not details.own_comp_success:
+        print_test_result(details, True, "successfully failed")
+        return True
+
     if fpc_timeout and not own_timeout:
-        print_test_output(details, False, "should have timed out but didn't")
+        print_test_result(details, False, "should have timed out but didn't")
         return False
     if not fpc_timeout and own_timeout:
-        print_test_output(details, False, "timed out when it shouldn't have")
+        print_test_result(details, False, "timed out when it shouldn't have")
         return False
     if fpc_timeout and own_timeout:
-        print_test_output(details, True, "correctly timed out")
+        print_test_result(details, True, "correctly timed out")
         return True
 
     if "java.lang.VerifyError" in details.own_result_out:
-        print_test_output(details, False, "verify error")
+        print_test_result(details, False, "verify error")
         return False
 
     matches = True
@@ -292,12 +322,12 @@ def test_file(
             break
 
     if matches:
-        print_test_output(details, True, "correct output")
+        print_test_result(details, True, "correct output")
         return True
     else:
         fpc_inline = details.fpc_result_out.strip().replace("\n", "↵")
         own_inline = details.own_result_out.strip().replace("\n", "↵")
-        print_test_output(
+        print_test_result(
             details,
             False,
             f"wrong output (expected: {fpc_inline} | got: {own_inline})",
@@ -310,6 +340,7 @@ def test_all(
     test_path: Path = Path("./test/sample.pas"),
     compilation_output: bool = False,
     execution_output: bool = False,
+    delete_gen_files=DELETE_GENERATED_FILES_WHEN_RUNNING_ALL,
 ):
     dirs = [base_dir]
     total_tested = 0
@@ -327,7 +358,11 @@ def test_all(
                     continue
                 total_tested += 1
                 if test_file(
-                    Path(f.path), test_path, compilation_output, execution_output
+                    Path(f.path),
+                    test_path,
+                    compilation_output,
+                    execution_output,
+                    delete_gen_files,
                 ):
                     successful += 1
             else:
@@ -364,4 +399,8 @@ if __name__ == "__main__":
             test_dir = Path(sys.argv[2])
         test_all(test_dir, COPY_TO)
     else:
-        test_file(Path(sys.argv[1]), COPY_TO)
+        delete_gen_files = DELETE_GENERATED_FILES_WHEN_RUNNING_ONE
+        if len(sys.argv) > 2:
+            if sys.argv[2] == "d":
+                delete_gen_files = not delete_gen_files
+        test_file(Path(sys.argv[1]), COPY_TO, delete_gen_files=delete_gen_files)
