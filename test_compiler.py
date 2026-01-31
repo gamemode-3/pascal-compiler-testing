@@ -29,10 +29,6 @@ COPY_TO = Path("./test/sample.pas")
 INDENT_SPACES = 2
 
 
-
-
-
-
 # ansi color codes
 RESET = "\033[0m"
 DIM = "\033[2m"
@@ -40,6 +36,7 @@ BRIGHT = "\033[1m"
 YELLOW = "\033[33m"
 RED = "\033[31m"
 GREEN = "\033[32m"
+
 
 def frame(
     string: str, frame_char: str, format_inner: FunctionType = lambda x: x
@@ -133,8 +130,8 @@ def test_file(
     class_name = test_path.name.removesuffix(".pas").title()
     # read class name from file
     with open(file_path, "r") as f:
-        first_line = f.readline()
-        matches = re.match(r"program ([a-zA-Z_][a-zA-Z0-9_]*);", first_line)
+        content = f.read()
+        matches = re.search(r".*program +([a-zA-Z_][a-zA-Z0-9_]*);.*", content)
         if matches != None:
             class_name = matches.group(1)
 
@@ -156,6 +153,11 @@ def test_file(
     except subprocess.CalledProcessError as e:
         details.fpc_comp_out = e.output
         details.fpc_comp_success = False
+    except UnicodeDecodeError as e:
+        details.fpc_comp_out = str(e)
+    
+    if "invalid continuation byte" in details.fpc_comp_out:
+        details.fpc_comp_success = False
 
     # compile with own compiler
     details.own_comp_success = True
@@ -169,6 +171,8 @@ def test_file(
     except subprocess.CalledProcessError as e:
         details.own_comp_out = e.output
         details.own_comp_success = False
+    except UnicodeDecodeError as e:
+        details.fpc_comp_out = str(e)
     if details.own_comp_success:
         jasmin_file_path = test_path.parent / (
             test_path.name.removesuffix(".pas") + ".j"
@@ -244,11 +248,14 @@ def test_file(
         details.own_result_out = e.output
 
     # clean output
-    details.fpc_result_out = re.sub(
-        r"([0-9]+\.[0-9])0+000E\+000", r"\1", details.fpc_result_out
-    ).removeprefix(" ")
-    details.own_result_out = details.own_result_out.replace("false", "FALSE").replace(
-        "true", "TRUE"
+    details.fpc_result_out = (
+        re.sub(r"([0-9]+\.[0-9])0+000E\+000", r"\1", details.fpc_result_out)
+        .removeprefix(" ")
+        .replace("FALSE", "false")
+        .replace("TRUE", "true")
+    )
+    details.own_result_out = details.own_result_out.replace("FALSE", "false").replace(
+        "TRUE", "true"
     )
 
     if fpc_timeout and not own_timeout:
@@ -265,19 +272,29 @@ def test_file(
         print_test_output(details, False, "verify error")
         return False
 
-    if details.fpc_result_out == details.own_result_out:
+    matches = True
+    for fpcl, ownl in zip(
+        details.fpc_result_out.strip().splitlines(),
+        details.own_result_out.strip().splitlines(),
+    ):
+        fpcl = fpcl.strip()
+        ownl = ownl.strip()
+
+        if fpcl == ownl:
+            continue
+        try:
+            a = float(fpcl)
+            b = float(ownl)
+            if abs(a - b) < 0.00001:
+                continue
+        except:
+            matches = False
+            break
+
+    if matches:
         print_test_output(details, True, "correct output")
         return True
     else:
-        try:
-            a = float(details.fpc_result_out.strip())
-            b = float(details.own_result_out.strip())
-            if abs(a - b) < 0.00001:
-                print_test_output(details, True, "correct output")
-                return True
-        except:
-            pass
-
         fpc_inline = details.fpc_result_out.strip().replace("\n", "↵")
         own_inline = details.own_result_out.strip().replace("\n", "↵")
         print_test_output(
