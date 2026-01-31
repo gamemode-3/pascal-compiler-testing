@@ -15,8 +15,8 @@ begin
   writeln(double_num); // -4.2000000000000000E+001
 
   // All relational and boolean operators:
-  bool_val := (int_num = 5) <> (int_num <> 5) And not true Or Not false And (5 > 3) And
-              (4  >= 4) And (3 < 5) And (4 <= 4) Or ('' = '') Or ('' <> 'text');
+  bool_val := (int_num = 5) <> (int_num <> 5) and not true or not false and (5 > 3) and
+              (4  >= 4) and (3 < 5) and (4 <= 4) or ('' = '') or ('' <> 'text');
   writeln(bool_val); // TRUE
 
 end.
