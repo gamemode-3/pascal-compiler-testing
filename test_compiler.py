@@ -475,9 +475,12 @@ def test_liveness(file_path: Path):
         return False
 
     if actual_reg == expect_reg:
+        msg = f"{actual_reg} registers"
+        if actual_reg == 1:
+            msg = "1 register"
         print(
             indent(
-                f'{fmt_suc("test passed")}  {fmt_dim(f"{actual_reg} registers is correct")}'
+                f'{fmt_suc("test passed")}  {fmt_dim(msg)}'
             )
         )
         return True
