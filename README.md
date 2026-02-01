@@ -4,14 +4,14 @@ Meine Test Cases plus ein Skript mit dem alle Tests ausgeführt werden
 ## Voraussetzungen
 Für die Liveness-Tests braucht ihr nur [Python](https://www.python.org/).
 
-Debian / Ubuntu:
+Linux (Debian / Ubuntu):
 ```bash
 sudo apt install python3
 ```
 
 Für die Kompilierungs-Tests müsst ihr auch noch [FPC](https://www.freepascal.org/) (Free Pascal Compiler 3.2.2) installiert haben.
 
-Debian / Ubuntu:
+Linux (Debian / Ubuntu):
 ```bash
 sudo apt install fpc
 ```
