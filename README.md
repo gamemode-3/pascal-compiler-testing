@@ -35,7 +35,7 @@ Wenn `<dir>` ausgelassen wird, wird ./test/ verwendet.
 
 Alle Pascal-Dateien in dem angegebenen Ordner und allen Unterordnern werden getestet. Ordner und Dateien, die mit `_` oder `-` beginnen werden ignoriert, sowie sample.pas
 
-### Liveness
+### Liveness-Tests
 Einen Test:
 ```
 python3 test_compiler.py -l <test_case>
