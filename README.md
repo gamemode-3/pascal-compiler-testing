@@ -21,7 +21,7 @@ Ihr werdet eure Aufrufsyntax evtl. noch einfügen müssen. Dazu gibt es am Anfan
 
 
 ## Tests ausführen
-### Kompilier-Tests
+### Kompilierungs-Tests
 Einen Test (Gibt Details aus):
 ```
 python3 test_compiler.py <test_case>
