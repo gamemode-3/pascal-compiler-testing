@@ -476,7 +476,9 @@ def test_liveness(file_path: Path):
 
     if actual_reg == expect_reg:
         print(
-            indent(f'{fmt_suc("test passed")}  {fmt_dim(f"{actual_reg} registers is correct")}')
+            indent(
+                f'{fmt_suc("test passed")}  {fmt_dim(f"{actual_reg} registers is correct")}'
+            )
         )
         return True
 
@@ -550,4 +552,3 @@ if __name__ == "__main__":
             if sys.argv[2] == "d":
                 delete_gen_files = not delete_gen_files
         test_compilation(Path(sys.argv[1]), COPY_TO, delete_gen_files=delete_gen_files)
-
