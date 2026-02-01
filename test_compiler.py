@@ -14,17 +14,35 @@ OWN_COMPILE_CMD = (
 FPC_COMPILE_CMD = 'fpc "{test_case}"'
 JASMIN_COMPILE_CMD = 'java -jar jasmin.jar -d "{dir}" "{jasmin_file_path}"'
 
+LIVENESS_CMD = (
+    'java -cp antlr-4.13.2-complete.jar:. StupsCompiler -liveness "{test_case}"'
+)
+
 # ==== Directories ====
 
-TEST_DIR = Path("./test/")
+COMPILATION_TEST_DIR = Path("./test/")
 """Der Ordner, in dem die Test Cases liegen. Auch Unterordner werden betrachtet."""
 
-COPY_TO = Path("./test/build/sample.pas")
+COPY_TO = Path("./test/_build/sample.pas")
 """
 Die .pas Datei wird in einen Kompilierungs-Ordner kopiert und dort kompiliert. 
 
 Auf `None` setzen, um das auszuschalten
 """
+
+EXCLUDE_FILES = [
+    r"_.*",  # fängt mit "_" an
+    r"-.*",  # fängt mit "-" an
+    r"^(?!.*\.pas$).*$",  # hört nicht mit ".pas" auf
+]
+EXCLUDE_FOLDERS = [
+    r"_.*",  # fängt mit "_" an
+    r"-.*",  # fängt mit "-" an
+]
+
+LIVENESS_TEST_DIR = Path("./test/liveness")
+"""Der Ordner, in dem die Liveness Test Cases liegen. Auch Unterordner werden betrachtet."""
+
 
 # === Miscellaneous ===
 
@@ -118,25 +136,35 @@ def print_test_result(details: TestDetails, test_success: bool, test_message: st
         print(f"‣ actual output:\n{indent(details.own_result_out)}\n")
     if not details.compilation_output and not details.execution_output:
         if test_success:
-            print(indent(f"{fmt_suc("test passed ✔")}   {fmt_dim(test_message)}"))
+            print(indent(f"{fmt_suc("test passed ✔")}  {fmt_dim(test_message)}"))
         else:
-            print(indent(f"{fmt_err("test failed ✘")}   {fmt_dim(test_message)}"))
+            print(indent(f"{fmt_err("test failed ✘")}  {fmt_dim(test_message)}"))
     else:
         if test_success:
-            print(f"{fmt_suc("✔ test passed")}   {fmt_dim(test_message)}")
+            print(f"{fmt_suc("✔ test passed")}  {fmt_dim(test_message)}")
         else:
-            print(f"{fmt_err("✘ test failed")}   {fmt_dim(test_message)}")
+            print(f"{fmt_err("✘ test failed")}  {fmt_dim(test_message)}")
 
 
-def test_file(
+def assert_file_exists(file_path: Path) -> bool:
+    if not file_path.exists():
+        print(fmt_err(f"file {file_path} does not exist"))
+        return False
+    if not file_path.is_file():
+        print(fmt_err(f"{file_path} is not a file"))
+        return False
+    return True
+
+
+def test_compilation(
     file_path: Path,
     test_path: Path,
     compilation_output=True,
     execution_output=True,
     delete_gen_files=DELETE_GENERATED_FILES_WHEN_RUNNING_ONE,
 ) -> bool:
-    assert file_path.exists()
-    assert file_path.is_file()
+    if not assert_file_exists(file_path):
+        return True
 
     if test_path is None:
         test_path = file_path
@@ -171,6 +199,14 @@ def test_file(
 
     if "invalid continuation byte" in details.fpc_comp_out:
         details.fpc_comp_success = False
+
+    folder_hint = None
+    if "shouldPass" in str(file_path.absolute()):
+        folder_hint = True
+    if "shouldFail" in str(file_path.absolute()):
+        folder_hint = False
+    if folder_hint is not None and folder_hint != details.fpc_comp_success:
+        print(fmt_wrn(f"file {file_path} is in the wrong folder"))
 
     # compile with own compiler
     details.own_comp_success = True
@@ -335,40 +371,47 @@ def test_file(
         return False
 
 
-def test_all(
+def get_files_in_subfolders(base_dir: Path) -> list[os.DirEntry[str]]:
+    file_exclude_ptrn = [re.compile(p) for p in EXCLUDE_FILES]
+    folder_exclude_ptrn = [re.compile(p) for p in EXCLUDE_FOLDERS]
+
+    dirs = [base_dir]
+    files: list[os.DirEntry[str]] = []
+    while len(dirs) > 0:
+        dir = dirs.pop()
+        for f in os.scandir(dir):
+            if f.is_file():
+                if any(p.match(f.name) for p in file_exclude_ptrn):
+                    continue
+                files.append(f)
+            else:
+                if any(p.match(f.name) for p in folder_exclude_ptrn):
+                    continue
+                dirs.append(Path(f.path))
+    return files
+
+
+def test_compilation_all(
     base_dir: Path = Path("./test/jasmin/"),
     test_path: Path = Path("./test/sample.pas"),
     compilation_output: bool = False,
     execution_output: bool = False,
     delete_gen_files=DELETE_GENERATED_FILES_WHEN_RUNNING_ALL,
 ):
-    dirs = [base_dir]
-    total_tested = 0
+    files = get_files_in_subfolders(base_dir)
+
     successful = 0
-    while len(dirs) > 0:
-        dir = dirs.pop()
-        for f in os.scandir(dir):
-            if f.is_file():
-                if (
-                    not f.name.endswith(".pas")
-                    or f.name.startswith("_")
-                    or f.name.startswith("-")
-                    or f.name == "sample.pas"
-                ):
-                    continue
-                total_tested += 1
-                if test_file(
-                    Path(f.path),
-                    test_path,
-                    compilation_output,
-                    execution_output,
-                    delete_gen_files,
-                ):
-                    successful += 1
-            else:
-                if f.name.startswith("_") or f.name.startswith("-"):
-                    continue
-                dirs.append(Path(f.path))
+    for f in files:
+        if test_compilation(
+            Path(f.path),
+            test_path,
+            compilation_output,
+            execution_output,
+            delete_gen_files,
+        ):
+            successful += 1
+
+    total_tested = len(files)
 
     if successful == total_tested:
         print(frame(f"passed all {total_tested} tests", "=", fmt_suc))
@@ -382,25 +425,129 @@ def test_all(
         )
 
 
+def test_liveness(file_path: Path):
+    if not assert_file_exists(file_path):
+        return True
+
+    print(f"▪ testing {file_path}")
+
+    expect_reg = None
+    with open(file_path, "r") as f:
+        content = f.read()
+        matches = re.search(r"\[\[ *LIVENESS_REGISTERS: *([0-9]+) *\]\]", content)
+        if matches != None:
+            expect_reg = int(matches.group(1))
+
+    if expect_reg is None:
+        print(fmt_err(f"file {file_path} does not specify expected register count"))
+        print(fmt_dim(f'add a comment with "[[LIVENESS_REGISTERS:<num_registers>]]"'))
+        return
+
+    # compile with own compiler
+    actual_out = None
+    try:
+        actual_out = subprocess.check_output(
+            LIVENESS_CMD.replace("{test_case}", str(file_path)),
+            stderr=subprocess.STDOUT,
+            shell=True,
+            text=True,
+        )
+    except subprocess.CalledProcessError as e:
+        actual_out = e.output
+    except UnicodeDecodeError as e:
+        pass
+
+    if actual_out == None:
+        print(indent(f'{fmt_err("test failed")}  {fmt_dim("no output")}'))
+        return False
+
+    actual_reg = None
+    matches = re.search(r"Registers: ([0-9]+)", actual_out)
+    if matches != None:
+        actual_reg = int(matches.group(1))
+
+    if actual_reg is None:
+        print(
+            indent(
+                f'{fmt_err("test failed")}  {fmt_dim("output: " + repr(actual_out))}'
+            )
+        )
+        return False
+
+    if actual_reg == expect_reg:
+        print(
+            indent(f'{fmt_suc("test passed")}  {fmt_dim(f"{actual_reg} registers is correct")}')
+        )
+        return True
+
+    print(
+        indent(
+            f'{fmt_err("test failed")}  {fmt_dim(f"expected: {expect_reg} | actual: {actual_reg}")}'
+        )
+    )
+    return False
+
+
+def test_liveness_all(
+    base_dir: Path = Path("./test/jasmin/"),
+):
+    files = get_files_in_subfolders(base_dir)
+
+    successful = 0
+    for f in files:
+        if test_liveness(
+            Path(f.path),
+        ):
+            successful += 1
+
+    total_tested = len(files)
+
+    if successful == total_tested:
+        print(frame(f"passed all {total_tested} liveness tests", "=", fmt_suc))
+    else:
+        print(
+            frame(
+                f"failed {total_tested - successful} of {total_tested} liveness tests",
+                "=",
+                fmt_err,
+            )
+        )
+
+
 if __name__ == "__main__":
     if len(sys.argv) < 2:
         print("USAGE:")
         print(
-            "python3 test_compiler.py <test_case>    test compiler on <test_case> with verbose output"
+            "python3 test_compiler.py <test_case>         test compiler on <test_case> with verbose output"
         )
         print(
-            "python3 test_compiler.py -a <test_dir>  test compiler on all .pas files in <test_dir>"
+            "python3 test_compiler.py -a [<test_dir>]     test compiler on all .pas files in <test_dir>"
+        )
+        print(
+            "python3 test_compiler.py -l <test_case>      test liveness on <test_case>"
+        )
+        print(
+            "python3 test_compiler.py -l -a [<test_dir>]  test liveness on all files in <test_dir>"
         )
         sys.exit()
 
     if sys.argv[1] == "-a":
-        test_dir = TEST_DIR
+        test_dir = COMPILATION_TEST_DIR
         if len(sys.argv) > 2:
             test_dir = Path(sys.argv[2])
-        test_all(test_dir, COPY_TO)
+        test_compilation_all(test_dir, COPY_TO)
+    elif sys.argv[1] == "-l":
+        if sys.argv[2] == "-a":
+            test_dir = LIVENESS_TEST_DIR
+            if len(sys.argv) > 3:
+                test_dir = Path(sys.argv[3])
+            test_liveness_all(test_dir)
+        else:
+            test_liveness(Path(sys.argv[1]))
     else:
         delete_gen_files = DELETE_GENERATED_FILES_WHEN_RUNNING_ONE
         if len(sys.argv) > 2:
             if sys.argv[2] == "d":
                 delete_gen_files = not delete_gen_files
-        test_file(Path(sys.argv[1]), COPY_TO, delete_gen_files=delete_gen_files)
+        test_compilation(Path(sys.argv[1]), COPY_TO, delete_gen_files=delete_gen_files)
+
