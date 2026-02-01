@@ -49,10 +49,10 @@ Wenn `<dir>` ausgelassen wird, wird ./test/liveness verwendet.
 
 
 ## Beispielausgabe mit `-a`
-<img alt="image" src="https://github.com/user-attachments/assets/4e03730a-c83c-4b3f-b8e2-74a7280b883c" />
+<img width="1747" height="484" alt="image" src="https://github.com/user-attachments/assets/f62cb661-71df-482b-a9dc-d0fdb0c744b1" />
 
 ## Beispielausgabe ohne `-a`
-<img alt="image" src="https://github.com/user-attachments/assets/86ed74c9-fc74-4ef2-ae1f-23550c4b31ff" />
+<img width="1747" height="1147" alt="image" src="https://github.com/user-attachments/assets/935b4aad-1a93-4126-8c9c-a7f7e437defb" />
 
 ## Credits
 Einige der Test Cases sind von [Jonas' Repo](https://codeberg.org/jfowl/CoBa2025-Pacal-Test-Cases) übernommen (und leicht abgewandelt)
